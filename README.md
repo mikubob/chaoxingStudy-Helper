@@ -16,7 +16,7 @@
 ## 快速开始（推荐）🚀
 
 1. 从 [GitHub Release](https://github.com/mikubob/chaoxingStudy-Helper/releases/latest) 下载 `ChaoxingStudy-Helper-Setup-*-x64.exe`，适用于 Windows x64。
-2. 运行安装程序，再从开始菜单打开 ChaoxingStudy Helper。安装包已包含 Python 后端。首次启动答题浏览器时，Selenium Manager 可能需要联网获取 Chrome 和配套驱动。
+2. 运行安装程序，在安装向导中选择安装目录，再从开始菜单打开 ChaoxingStudy Helper。安装包已包含 Python 后端。首次启动答题浏览器时，Selenium Manager 可能需要联网获取 Chrome 和配套驱动。
 
 ### 程序截图
 
@@ -45,6 +45,10 @@ pip install dashscope selenium==4.31.0 requests
 
 - 目前本项目仅支持单选题、多选题、填空题和判断题的自动作答。✅ （目前仅考试模式支持填空）
 - 使用前请确保已正确配置AI模型和相关依赖。🔧
+
+## 版本 1.2.1
+
+- Windows 安装向导支持自选安装目录。
 
 ## 版本 1.2.0
 

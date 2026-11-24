@@ -1,6 +1,6 @@
 {
   "name": "chaoxing-exam",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "ChaoxingStudy Helper desktop app",
   "author": "mikubob",
   "main": "electron/main.js",
@@ -20,6 +20,10 @@
     ],
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "scripts": {
