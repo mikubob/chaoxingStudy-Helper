@@ -72,6 +72,7 @@
         <template #footer>
           <div style="text-align: center">
             <el-button type="primary" @click="runCmd">开始作答</el-button>
+            <p v-if="settingsError" role="status">{{ settingsError }}</p>
             <div style="text-align: left">日志输出：</div>
             <pre
                 id="output"
@@ -88,22 +89,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { inject, ref, onMounted, toRaw, watch } from 'vue'
+
+const { initialSettings, settingsLoadFailed } = inject('settingsStartup', { initialSettings: {} })
 
 // 表单数据
-const username = ref('')
-const password = ref('')
-const cxurl = ref('')
-const tyapi = ref('')
-const provider = ref('tongyi')
-const modelNames = ref({ tongyi: '', ollama: '', openai: '' })
+const username = ref(initialSettings.username ?? '')
+const password = ref(initialSettings.password ?? '')
+const cxurl = ref(initialSettings.cxurl ?? '')
+const tyapi = ref(initialSettings.tyapi ?? '')
+const provider = ref(initialSettings.provider ?? 'tongyi')
+const modelNames = ref({ tongyi: '', ollama: '', openai: '', ...initialSettings.modelNames })
 const modelPlaceholders = { tongyi: '默认 qwen-max', ollama: '默认 qwen2:latest', openai: '请输入服务提供的模型名称' }
-const visionModels = ref({ tongyi: '', openai: '' })
-const serviceUrls = ref({ ollama: '', openai: '' })
-const openaiApiKey = ref('')
-const imageHosting = ref(false)
-const allImages = ref(false)
-const taskType = ref()
+const visionModels = ref({ tongyi: '', openai: '', ...initialSettings.visionModels })
+const serviceUrls = ref({ ollama: '', openai: '', ...initialSettings.serviceUrls })
+const openaiApiKey = ref(initialSettings.openaiApiKey ?? '')
+const imageHosting = ref(initialSettings.imageHosting ?? false)
+const allImages = ref(initialSettings.allImages ?? false)
+const taskType = ref(initialSettings.taskType)
+const settingsError = ref(settingsLoadFailed ? '无法读取本地配置，已使用默认设置。' : '')
+
+const settings = {
+  username, password, cxurl, tyapi, provider, modelNames, visionModels,
+  serviceUrls, openaiApiKey, imageHosting, allImages, taskType,
+}
+
+watch(Object.values(settings), async () => {
+  const values = Object.fromEntries(Object.entries(settings).map(([key, field]) => [key, toRaw(field.value)]))
+  try {
+    await window.electronAPI.saveSettings(values)
+    settingsError.value = ''
+  } catch {
+    settingsError.value = '无法保存本地配置。'
+  }
+}, { deep: true, flush: 'sync' })
 
 // 运行命令
 const runCmd = () => {

@@ -24,6 +24,8 @@
 
 在桌面端的「模型服务」中选择通义千问、Ollama 或 OpenAI 兼容服务。
 
+桌面端会自动加密保存表单配置，并在下次启动时恢复。各模型服务的模型名称、地址和密钥会分别保留。
+
 - **通义千问**默认使用 `qwen-max`。填写 API Token，可另外指定图片填空题使用的模型，默认为 `qwen-vl-max-latest`。[申请通义千问 API Token](https://bailian.console.aliyun.com/?apiKey=1)
 - **Ollama** 默认连接 `http://localhost:11434`，使用 `qwen2:latest`。可以填写远程 Ollama 地址和该服务上已安装的模型名。Ollama 支持选择题和判断题。
 - **OpenAI 兼容服务**填写服务地址、模型名称和 API Key。地址可填写主机名（例如 `https://api.example.com`）、带版本的 Base URL（例如 `https://api.example.com/v1`）或完整的 `/chat/completions` URL。无需认证的服务可将 API Key 留空。含图题可单独设置支持图片输入的模型，留空时使用所选文本模型。
@@ -49,6 +51,10 @@ pip install dashscope selenium==4.31.0 requests
 
 - 目前本项目仅支持单选题、多选题、填空题和判断题的自动作答。✅ （目前仅考试模式支持填空）
 - 使用前请确保已正确配置AI模型和相关依赖。🔧
+
+## 版本 1.2.4
+
+- 桌面端自动加密保存表单配置，重启后恢复，并分别保留各模型服务的设置。
 
 ## 版本 1.2.3
 

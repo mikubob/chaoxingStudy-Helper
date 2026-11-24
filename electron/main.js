@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu , ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, safeStorage, shell } = require('electron');
+const fs = require('node:fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const iconv = require('iconv-lite');
@@ -65,6 +66,39 @@ app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+});
+
+function settingsFile() {
+    return path.join(app.getPath('userData'), 'settings.enc');
+}
+
+function checkSettingsEncryption() {
+    if (!safeStorage.isEncryptionAvailable() ||
+        (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
+        throw new Error('Local settings encryption is unavailable');
+    }
+}
+
+ipcMain.handle('load-settings', () => {
+    let encrypted;
+    try {
+        encrypted = fs.readFileSync(settingsFile());
+    } catch (error) {
+        if (error.code === 'ENOENT') return {};
+        throw error;
+    }
+    checkSettingsEncryption();
+    return JSON.parse(safeStorage.decryptString(encrypted));
+});
+
+ipcMain.handle('save-settings', (_event, settings) => {
+    checkSettingsEncryption();
+    const encrypted = safeStorage.encryptString(JSON.stringify(settings));
+    const file = settingsFile();
+    const temporaryFile = `${file}.${process.pid}.tmp`;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(temporaryFile, encrypted, { mode: 0o600 });
+    fs.renameSync(temporaryFile, file);
 });
 
 ipcMain.on('run-cmd', (event, args) => {
