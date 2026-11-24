@@ -35,6 +35,10 @@
               图片模型：
               <el-input v-model="visionModels[provider]" aria-label="图片模型" style="width: 50%; margin-left: 10%" :placeholder="provider === 'tongyi' ? '默认 qwen-vl-max-latest' : '留空使用文本模型'" />
             </div>
+            <div v-if="provider === 'openai'" style="margin-top: 10px">
+              <el-checkbox v-model="imageHosting">上传到第三方图床</el-checkbox>
+              <el-checkbox v-model="allImages">读取题干和选项的全部图片</el-checkbox>
+            </div>
             <div v-if="provider !== 'tongyi'" style="margin-top: 10px">
               服务地址：
               <el-input v-model="serviceUrls[provider]" aria-label="服务地址" style="width: 50%; margin-left: 10%" :placeholder="provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'" />
@@ -97,6 +101,8 @@ const modelPlaceholders = { tongyi: '默认 qwen-max', ollama: '默认 qwen2:lat
 const visionModels = ref({ tongyi: '', openai: '' })
 const serviceUrls = ref({ ollama: '', openai: '' })
 const openaiApiKey = ref('')
+const imageHosting = ref(false)
+const allImages = ref(false)
 const taskType = ref()
 
 // 运行命令
@@ -116,6 +122,8 @@ const runCmd = () => {
     args.push(`--api=${apiKey.trim()}`, `--vision-model=${visionModels.value[provider.value].trim()}`)
     if (provider.value === 'openai') {
       args.push(`--api-url=${serviceUrls.value.openai.trim()}`)
+      if (imageHosting.value) args.push('--image-hosting')
+      if (allImages.value) args.push('--all-images')
     }
   }
   window.electronAPI.send('run-cmd', args)

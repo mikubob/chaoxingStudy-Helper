@@ -26,7 +26,10 @@
 
 - **通义千问**默认使用 `qwen-max`。填写 API Token，可另外指定图片填空题使用的模型，默认为 `qwen-vl-max-latest`。[申请通义千问 API Token](https://bailian.console.aliyun.com/?apiKey=1)
 - **Ollama** 默认连接 `http://localhost:11434`，使用 `qwen2:latest`。可以填写远程 Ollama 地址和该服务上已安装的模型名。Ollama 支持选择题和判断题。
-- **OpenAI 兼容服务**填写服务地址、模型名称和 API Key。地址可填写主机名（例如 `https://api.example.com`）、带版本的 Base URL（例如 `https://api.example.com/v1`）或完整的 `/chat/completions` URL。无需认证的服务可将 API Key 留空。图片填空题可单独设置支持图片输入的模型，留空时使用所选文本模型。
+- **OpenAI 兼容服务**填写服务地址、模型名称和 API Key。地址可填写主机名（例如 `https://api.example.com`）、带版本的 Base URL（例如 `https://api.example.com/v1`）或完整的 `/chat/completions` URL。无需认证的服务可将 API Key 留空。含图题可单独设置支持图片输入的模型，留空时使用所选文本模型。
+  - 默认将找到的首图以 Base64 随请求发送。查找顺序是先题干，再按页面顺序查找选项。
+  - 勾选「上传到第三方图床」（`--image-hosting`）时，图片会先上传到 `image.myxuebi.top`，模型请求中发送图片直链。
+  - 勾选「读取题干和选项的全部图片」（`--all-images`）时，会将题干和各选项中的图片一起发送，并标注每组图片对应的选项。
 
 ## 从源码运行 🛠️
 
@@ -46,6 +49,11 @@ pip install dashscope selenium==4.31.0 requests
 
 - 目前本项目仅支持单选题、多选题、填空题和判断题的自动作答。✅ （目前仅考试模式支持填空）
 - 使用前请确保已正确配置AI模型和相关依赖。🔧
+
+## 版本 1.2.3
+
+- OpenAI 兼容服务支持选择 Base64 或第三方图床直链发送图片。
+- 支持读取首图或题干和选项中的全部图片，并标注每组图片对应的选项。
 
 ## 版本 1.2.2
 

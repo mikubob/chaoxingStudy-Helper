@@ -8,7 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 import dashscope
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchDriverException, NoSuchElementException, SessionNotCreatedException
+from selenium.common.exceptions import NoSuchDriverException, NoSuchElementException, SessionNotCreatedException, WebDriverException
 from selenium.webdriver.chrome.service import Service as ChromeService
 import requests
 sys.stdout.reconfigure(encoding='gbk', line_buffering=True,errors='ignore')
@@ -27,6 +27,8 @@ default_ollama_url = 'http://localhost:11434'
 default_vision_model = 'qwen-vl-max-latest'
 default_text_models = {'tongyi': 'qwen-max', 'ollama': 'qwen2:latest', 'openai': ''}
 api_url = ''
+image_hosting = False
+all_images = False
 arg = sys.argv
 if len(arg) < 2:
     username = input('请输入超星账号:')
@@ -48,6 +50,8 @@ if len(arg) < 2:
         api_url = input('OpenAI 兼容服务地址：').strip()
         api_key = input('API Key（服务无需认证时可留空）：').strip()
         vision_model = input('图片模型（留空使用文本模型）：').strip()
+        image_hosting = input('使用第三方图床 image.myxuebi.top（y/N）：').strip().lower() == 'y'
+        all_images = input('读取题干和选项中的全部图片（y/N，默认仅读取首图）：').strip().lower() == 'y'
     else:
         sys.exit("请选择模型服务 1、2 或 3")
     default_model = default_text_models[modelAi]
@@ -66,6 +70,8 @@ else:
     parser.add_argument('--ollama-url', default=default_ollama_url, help='Ollama 服务地址')
     parser.add_argument('--api-url', default='', help='OpenAI 兼容服务地址或完整的 Chat Completions 地址')
     parser.add_argument('--vision-model', default='', help='图片模型名称')
+    parser.add_argument('--image-hosting', action='store_true', help='OpenAI 兼容服务使用第三方图床')
+    parser.add_argument('--all-images', action='store_true', help='OpenAI 兼容服务读取题干和选项中的全部图片')
 
     args = parser.parse_args()
 
@@ -78,6 +84,8 @@ else:
     ollama_url = args.ollama_url.strip() or default_ollama_url
     api_url = args.api_url.strip()
     vision_model = args.vision_model.strip()
+    image_hosting = args.image_hosting
+    all_images = args.all_images
     homework = args.homework
 
 if modelAi == 'tongyi' and not api_key:
@@ -198,24 +206,56 @@ def generate_text(text):
         raise RuntimeError(f"通义千问模型 {model_name} 调用失败：{response['message']}")
     return response['output']['choices'][0]['message']['content']
 
-def answer_options(text):
+class QuestionImageError(RuntimeError):
+    pass
+
+
+def answer_openai_question(prompt, stem, options):
+    content = [{'type': 'text', 'text': prompt}]
+    image_sources = [(None, stem), *options]
+    for letter, element in image_sources:
+        images = element.find_elements(By.XPATH, './/img')
+        if not images:
+            continue
+        label = f'选项 {letter}' if letter else '题干'
+        content.append({'type': 'text', 'text': f'{label}的图片：'})
+        selected_images = images if all_images else images[:1]
+        for image in selected_images:
+            try:
+                if image_hosting:
+                    screenshot = image.screenshot_as_png
+                    image_url = upload_question_image('question.png', screenshot) if screenshot else None
+                else:
+                    screenshot = image.screenshot_as_base64
+                    image_url = f'data:image/png;base64,{screenshot}' if screenshot else None
+            except (requests.RequestException, ValueError, KeyError, TypeError, WebDriverException) as error:
+                raise QuestionImageError(f'无法读取{label}的图片') from error
+            if not image_url:
+                raise QuestionImageError(f'无法读取{label}的图片')
+            content.append({'type': 'image_url', 'image_url': {'url': image_url}})
+        if not all_images:
+            break
+
+    if len(content) == 1:
+        return generate_text(prompt)
+    return chat_completions(content, vision_model)
+
+
+def answer_options(text, stem, options=()):
     text = f"这是题目：{text} 直接返回给我答案的对应字母 不要描述其他的"
+    if modelAi == 'openai':
+        return answer_openai_question(text, stem, options)
     return generate_text(text)
 
-def answer_blanks(text,num):
+def answer_blanks(text, num, stem):
     text = f"这是一道填空题,{text},请你进行回答,问题里的$填空内容就是需要回答的地方,一共有{num}个空,请你直接告诉我答案 不要描述其他的 每个答案用换行分隔 返回答案的数量要跟我发的一模一样"
+    if modelAi == 'openai':
+        return answer_openai_question(text, stem, ())
     return generate_text(text)
 
 def answer_image(text, num, img):
     i = 0
     text1 = f"这是一道填空题,{text},相关图片信息我已提交,请你进行回答里面的问题,一共有{num}个空,请你直接告诉我答案 不要描述其他的 任何一个空的答案都全部用换行分隔 返回答案的数量要跟我发的一模一样,不要描述其他的"
-    if modelAi == 'openai':
-        content = [
-            {'type': 'text', 'text': text1},
-            {'type': 'image_url', 'image_url': {'url': img}},
-        ]
-        return chat_completions(content, vision_model)
-
     while True:
         print("AI图片处理中，请稍后...")
         messages = [
@@ -255,12 +295,20 @@ def upload_tongyi_image(src):
     if not image.ok:
         print("无法下载题目图片")
         return None
-    files = {"file": (os.path.basename(urlsplit(src).path), image.content)}
+    return upload_question_image(os.path.basename(urlsplit(src).path), image.content)
+
+
+def upload_question_image(filename, image):
+    files = {"file": (filename, image)}
     response = requests.post("https://image.myxuebi.top/api/v1/upload", files=files, timeout=30)
     if not response.ok:
-        print("无法为通义千问生成图片直链")
+        print("无法从第三方图床获取图片直链")
         return None
     return response.json()["data"]["links"]["url"]
+
+def exam_option_labels(options):
+    return [(option.find_element(By.XPATH, './/span').text, option) for option in options]
+
 
 def extract_question_and_options():
         # que_ele = browser.find_element(By.XPATH,"//div[@style='overflow:hidden;']")
@@ -270,11 +318,11 @@ def extract_question_and_options():
             # type_ele = browser.find_element(By.XPATH,"//span[@class='colorShallow']")
             # type_text = type_ele.text.split("(")[1].split(",")[0]
 
-            options = browser.find_elements(By.XPATH, "//div[@class='clearfix answerBg singleoption']")
+            options = exam_option_labels(browser.find_elements(By.XPATH, "//div[@class='clearfix answerBg singleoption']"))
             choose = ""
-            for option in options:
-                option_letter = option.find_element(By.XPATH, ".//span").text
-                option_content = option.find_element(By.XPATH, ".//div").text
+            for option_letter, option in options:
+                option_bodies = option.find_elements(By.XPATH, ".//div")
+                option_content = option_bodies[0].text if option_bodies else ''
                 choose += f"{option_letter}: {option_content} "
 
             que = f"{num_ele.text} {choose}"
@@ -283,7 +331,7 @@ def extract_question_and_options():
             if (modelAi == "ollama"):
                 ans = ollama(que)
             else:
-                ans = answer_options(que)
+                ans = answer_options(que, num_ele, options)
             print("AI参考答案：" + ans)
             if 'A' in ans:
                 A = browser.find_element(By.XPATH, "//span[text()='A']")
@@ -310,11 +358,11 @@ def extract_question_and_options():
             if status == False:
                 sys.exit(0)
         elif "多选" in num_ele.text:
-            options = browser.find_elements(By.XPATH, "//div[@class='clearfix answerBg']")
+            options = exam_option_labels(browser.find_elements(By.XPATH, "//div[@class='clearfix answerBg']"))
             choose = ""
-            for option in options:
-                option_letter = option.find_element(By.XPATH, ".//span").text
-                option_content = option.find_element(By.XPATH, ".//div").text
+            for option_letter, option in options:
+                option_bodies = option.find_elements(By.XPATH, ".//div")
+                option_content = option_bodies[0].text if option_bodies else ''
                 choose += f"{option_letter}: {option_content} "
 
             que = f"{num_ele.text} {choose}"
@@ -323,7 +371,7 @@ def extract_question_and_options():
             if (modelAi == "ollama"):
                 ans = ollama(que)
             else:
-                ans = answer_options(que)
+                ans = answer_options(que, num_ele, options)
 
             print("AI参考答案：" + ans)
             if 'A' in ans:
@@ -357,7 +405,13 @@ def extract_question_and_options():
             if (modelAi == "ollama"):
                 ans = ollama(que + "判断题返回对或错")
             else:
-                ans = answer_options(que + "判断题返回对或错")
+                options = []
+                if modelAi == 'openai':
+                    for letter in ('A', 'B'):
+                        elements = browser.find_elements(By.XPATH, f"//span[text()='{letter}']/ancestor::div[contains(@class, 'answerBg')][1]")
+                        if elements:
+                            options.append((letter, elements[0]))
+                ans = answer_options(que + "判断题返回对或错", num_ele, options)
 
             print("AI参考答案：" + ans)
 
@@ -390,22 +444,16 @@ def extract_question_and_options():
                     sys.exit(0)
                 return
 
-            images = num_ele.find_elements(By.XPATH, ".//img")
             image_url = None
-            if images:
-                img = images[0]
-                if modelAi == 'openai':
-                    image_url = f'data:image/png;base64,{img.screenshot_as_base64}'
-                else:
-                    image_url = upload_tongyi_image(img.get_attribute("src"))
-            if image_url:
-                ans = answer_image(que, kong_num, image_url)
-                if ans == "error":
-                    if not click_next_button():
-                        sys.exit(0)
-                    return
-            else:
-                ans = answer_blanks(que, kong_num)
+            if modelAi == 'tongyi':
+                images = num_ele.find_elements(By.XPATH, './/img')
+                if images:
+                    image_url = upload_tongyi_image(images[0].get_attribute('src'))
+            ans = answer_image(que, kong_num, image_url) if image_url else answer_blanks(que, kong_num, num_ele)
+            if image_url and ans == 'error':
+                if not click_next_button():
+                    sys.exit(0)
+                return
             ans_list = ans.split("\n")
             ans_list = list(filter(None,ans_list))
             print("AI参考答案：" + str(ans_list))
@@ -459,7 +507,12 @@ def click_next_button():
 def getque():
     while True:
         time.sleep(0.5)
-        extract_question_and_options()
+        try:
+            extract_question_and_options()
+        except QuestionImageError as error:
+            print(f'{error}，跳过此题')
+            if not click_next_button():
+                return
 
 
 def extract_question_and_options_homework():
@@ -496,13 +549,16 @@ def extract_question_and_options_homework():
 
         # 构造选项文本用于 AI 请求
         options_text = ""
+        labeled_options = []
         for opt in option_elements:
             try:
                 letter = opt.find_element(By.XPATH, ".//span[contains(@class,'num_option')]").text
-                content = opt.find_element(By.XPATH, ".//div[contains(@class,'answer_p')]").text
-                options_text += f"{letter}: {content} "
-            except:
+            except NoSuchElementException:
                 continue
+            labeled_options.append((letter, opt))
+            content = opt.find_elements(By.XPATH, ".//div[contains(@class,'answer_p')]")
+            if content or modelAi == 'openai':
+                options_text += f"{letter}: {content[0].text if content else ''} "
 
         # 组装完整问题
         full_question = f"{full_title} {options_text}"
@@ -513,7 +569,11 @@ def extract_question_and_options_homework():
         if modelAi == "ollama":
             ai_answer = ollama(full_question)
         else:
-            ai_answer = answer_options(full_question)
+            try:
+                ai_answer = answer_options(full_question, title_element, labeled_options)
+            except QuestionImageError as error:
+                print(f'{error}，跳过此题')
+                continue
 
         print(f"AI参考答案: {ai_answer}")
 
