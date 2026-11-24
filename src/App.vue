@@ -24,19 +24,24 @@
               <el-select v-model="provider" aria-label="模型服务" style="width: 50%; margin-left: 10%">
                 <el-option label="通义千问" value="tongyi" />
                 <el-option label="Ollama" value="ollama" />
+                <el-option label="OpenAI 兼容服务" value="openai" />
               </el-select>
             </div>
             <div style="margin-top: 10px">
               文本模型：
-              <el-input v-model="modelNames[provider]" aria-label="文本模型" style="width: 50%; margin-left: 10%" :placeholder="provider === 'ollama' ? '默认 qwen2:latest' : '默认 qwen-max'" />
+              <el-input v-model="modelNames[provider]" aria-label="文本模型" style="width: 50%; margin-left: 10%" :placeholder="modelPlaceholders[provider]" />
             </div>
-            <div v-if="provider === 'tongyi'" style="margin-top: 10px">
+            <div v-if="provider !== 'ollama'" style="margin-top: 10px">
               图片模型：
-              <el-input v-model="visionModel" aria-label="图片模型" style="width: 50%; margin-left: 10%" placeholder="默认 qwen-vl-max-latest" />
+              <el-input v-model="visionModels[provider]" aria-label="图片模型" style="width: 50%; margin-left: 10%" :placeholder="provider === 'tongyi' ? '默认 qwen-vl-max-latest' : '留空使用文本模型'" />
             </div>
-            <div v-else style="margin-top: 10px">
+            <div v-if="provider !== 'tongyi'" style="margin-top: 10px">
               服务地址：
-              <el-input v-model="ollamaUrl" aria-label="Ollama 服务地址" style="width: 50%; margin-left: 10%" placeholder="http://localhost:11434" />
+              <el-input v-model="serviceUrls[provider]" aria-label="服务地址" style="width: 50%; margin-left: 10%" :placeholder="provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'" />
+            </div>
+            <div v-if="provider === 'openai'" style="margin-top: 10px">
+              API Key：
+              <el-input v-model="openaiApiKey" aria-label="API Key" type="password" show-password style="width: 50%; margin-left: 10%" placeholder="无需认证时可留空" />
             </div>
             <div v-if="provider === 'tongyi'" style="margin-top: 10px">
               通义Token：
@@ -87,9 +92,11 @@ const password = ref('')
 const cxurl = ref('')
 const tyapi = ref('')
 const provider = ref('tongyi')
-const modelNames = ref({ tongyi: '', ollama: '' })
-const visionModel = ref('')
-const ollamaUrl = ref('')
+const modelNames = ref({ tongyi: '', ollama: '', openai: '' })
+const modelPlaceholders = { tongyi: '默认 qwen-max', ollama: '默认 qwen2:latest', openai: '请输入服务提供的模型名称' }
+const visionModels = ref({ tongyi: '', openai: '' })
+const serviceUrls = ref({ ollama: '', openai: '' })
+const openaiApiKey = ref('')
 const taskType = ref()
 
 // 运行命令
@@ -102,10 +109,14 @@ const runCmd = () => {
     `--provider=${provider.value}`,
     `--model=${modelNames.value[provider.value].trim()}`,
   ]
-  if (provider.value === 'tongyi') {
-    args.push(`--api=${tyapi.value.trim()}`, `--vision-model=${visionModel.value.trim()}`)
+  if (provider.value === 'ollama') {
+    args.push(`--ollama-url=${serviceUrls.value.ollama.trim()}`)
   } else {
-    args.push(`--ollama-url=${ollamaUrl.value.trim()}`)
+    const apiKey = provider.value === 'tongyi' ? tyapi.value : openaiApiKey.value
+    args.push(`--api=${apiKey.trim()}`, `--vision-model=${visionModels.value[provider.value].trim()}`)
+    if (provider.value === 'openai') {
+      args.push(`--api-url=${serviceUrls.value.openai.trim()}`)
+    }
   }
   window.electronAPI.send('run-cmd', args)
 }

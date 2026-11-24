@@ -22,20 +22,21 @@
 
  ![screenshot](screenshot.png)
 
-在桌面端的「模型服务」中选择通义千问或 Ollama，并按需填写「文本模型」。留空时使用该服务的默认模型。
+在桌面端的「模型服务」中选择通义千问、Ollama 或 OpenAI 兼容服务。
 
 - **通义千问**默认使用 `qwen-max`。填写 API Token，可另外指定图片填空题使用的模型，默认为 `qwen-vl-max-latest`。[申请通义千问 API Token](https://bailian.console.aliyun.com/?apiKey=1)
 - **Ollama** 默认连接 `http://localhost:11434`，使用 `qwen2:latest`。可以填写远程 Ollama 地址和该服务上已安装的模型名。Ollama 支持选择题和判断题。
+- **OpenAI 兼容服务**填写服务地址、模型名称和 API Key。地址可填写主机名（例如 `https://api.example.com`）、带版本的 Base URL（例如 `https://api.example.com/v1`）或完整的 `/chat/completions` URL。无需认证的服务可将 API Key 留空。图片填空题可单独设置支持图片输入的模型，留空时使用所选文本模型。
 
 ## 从源码运行 🛠️
 
-安装 Python 依赖。程序会查找 Chrome 并管理驱动。如果运行目录中已有 `chromedriver/chrome.exe` 和 `chromedriver/chromedriver.exe`，程序会使用这两个文件。
+安装 Python 依赖。程序会查找 Chrome 并通过 Selenium Manager 匹配驱动，自动匹配时跳过 PATH 上的 ChromeDriver。如果运行目录中已有配套的 `chromedriver/chrome.exe` 和 `chromedriver/chromedriver.exe`，仍可使用这两个文件。
 
 ```sh
 pip install dashscope selenium==4.31.0 requests
 ```
 
-运行 `python main.py`，按提示输入账号、密码和第一题链接，再选择服务并填写模型。也可通过参数指定配置，运行 `python main.py --help` 查看 `--provider`、`--model`、`--ollama-url` 和 `--vision-model` 的用法。
+运行 `python main.py`，按提示输入账号、密码和第一题链接，再选择服务并填写模型。也可通过参数指定配置，运行 `python main.py --help` 查看 `--provider`、`--model`、`--api-url`、`--ollama-url` 和 `--vision-model` 的用法。
 
 开发桌面端时，运行 `npm ci`，再在两个终端分别运行 `npm run serve` 和 `npm run electron:serve`。
 
@@ -45,6 +46,11 @@ pip install dashscope selenium==4.31.0 requests
 
 - 目前本项目仅支持单选题、多选题、填空题和判断题的自动作答。✅ （目前仅考试模式支持填空）
 - 使用前请确保已正确配置AI模型和相关依赖。🔧
+
+## 版本 1.2.2
+
+- 修复旧版 ChromeDriver 导致的 Chrome 启动失败。
+- 新增可自定义服务地址和模型的 OpenAI 兼容服务。
 
 ## 版本 1.2.1
 
