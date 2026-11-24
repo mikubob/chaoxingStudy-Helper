@@ -1,12 +1,33 @@
 {
   "name": "chaoxing-exam",
-  "version": "0.1.0",
+  "version": "1.2.0",
+  "description": "ChaoxingStudy Helper desktop app",
+  "author": "mikubob",
   "main": "electron/main.js",
+  "build": {
+    "appId": "io.github.mikubob.chaoxingstudyhelper",
+    "productName": "ChaoxingStudy Helper",
+    "artifactName": "ChaoxingStudy-Helper-Setup-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": ["dist/**/*", "electron/**/*", "package.json"],
+    "extraResources": [
+      {
+        "from": "build-tools/backend/chaoxing-backend",
+        "to": "backend"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "electron:serve": "set NODE_ENV=development&& electron .",
-    "electron:build": "vue-cli-service build && electron-builder"
+    "build:backend": "python -m PyInstaller --noconfirm --onedir --name chaoxing-backend --collect-data selenium --distpath build-tools/backend --workpath build-tools/pyinstaller --specpath build-tools main.py",
+    "electron:build": "npm run build && npm run build:backend && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "browserify-fs": "^1.0.0",

@@ -20,8 +20,27 @@
               <el-input v-model="cxurl" style="width: 50%; margin-left: 10%" placeholder="进入考试后的第一题链接" />
             </div>
             <div style="margin-top: 10px">
+              模型服务：
+              <el-select v-model="provider" aria-label="模型服务" style="width: 50%; margin-left: 10%">
+                <el-option label="通义千问" value="tongyi" />
+                <el-option label="Ollama" value="ollama" />
+              </el-select>
+            </div>
+            <div style="margin-top: 10px">
+              文本模型：
+              <el-input v-model="modelNames[provider]" aria-label="文本模型" style="width: 50%; margin-left: 10%" :placeholder="provider === 'ollama' ? '默认 qwen2:latest' : '默认 qwen-max'" />
+            </div>
+            <div v-if="provider === 'tongyi'" style="margin-top: 10px">
+              图片模型：
+              <el-input v-model="visionModel" aria-label="图片模型" style="width: 50%; margin-left: 10%" placeholder="默认 qwen-vl-max-latest" />
+            </div>
+            <div v-else style="margin-top: 10px">
+              服务地址：
+              <el-input v-model="ollamaUrl" aria-label="Ollama 服务地址" style="width: 50%; margin-left: 10%" placeholder="http://localhost:11434" />
+            </div>
+            <div v-if="provider === 'tongyi'" style="margin-top: 10px">
               通义Token：
-              <el-input v-model="tyapi" style="width: 50%; margin-left: 10%" placeholder="通义千问API TOKEN" />
+              <el-input v-model="tyapi" type="password" show-password style="width: 50%; margin-left: 10%" placeholder="通义千问 API Token" />
               <a @click.prevent="startie('https://bailian.console.aliyun.com/?apiKey=1#/api-key')" style="margin-left: 10px" href="#">申请API</a>
             </div>
             <div style="margin-top: 10px">
@@ -67,12 +86,28 @@ const username = ref('')
 const password = ref('')
 const cxurl = ref('')
 const tyapi = ref('')
+const provider = ref('tongyi')
+const modelNames = ref({ tongyi: '', ollama: '' })
+const visionModel = ref('')
+const ollamaUrl = ref('')
 const taskType = ref()
 
 // 运行命令
 const runCmd = () => {
-  const command = `cmd /c py\\main.exe --username "${username.value}" --password "${password.value}" --url "${cxurl.value}" --api "${tyapi.value}" --homework "${taskType.value === 'homework' ? 'y' : 'n'}"`
-  window.electronAPI.send('run-cmd', command)
+  const args = [
+    `--username=${username.value}`,
+    `--password=${password.value}`,
+    `--url=${cxurl.value}`,
+    `--homework=${taskType.value === 'homework' ? 'y' : 'n'}`,
+    `--provider=${provider.value}`,
+    `--model=${modelNames.value[provider.value].trim()}`,
+  ]
+  if (provider.value === 'tongyi') {
+    args.push(`--api=${tyapi.value.trim()}`, `--vision-model=${visionModel.value.trim()}`)
+  } else {
+    args.push(`--ollama-url=${ollamaUrl.value.trim()}`)
+  }
+  window.electronAPI.send('run-cmd', args)
 }
 
 // 监听命令输出

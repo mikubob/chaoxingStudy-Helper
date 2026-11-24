@@ -19,9 +19,8 @@ function createWindow() {
         win.loadURL('http://localhost:8080');
         // win.webContents.openDevTools();
     } else {
-        win.loadFile(path.join(__dirname, '../dist-web/index.html'));
+        win.loadFile(path.join(__dirname, '../dist/index.html'));
     }
-    // win.loadFile(path.join(__dirname, '../dist-web/index.html'));
     // win.webContents.openDevTools();
 
     win.webContents.on('context-menu', (event, params) => {
@@ -68,8 +67,21 @@ app.on('activate', () => {
     }
 });
 
-ipcMain.on('run-cmd', (event, command) => {
-    const cmdProcess = spawn(command, { shell: true });
+ipcMain.on('run-cmd', (event, args) => {
+    if (!Array.isArray(args) || !args.every(arg => typeof arg === 'string' && arg.startsWith('--'))) {
+        return;
+    }
+
+    const backend = path.join(process.resourcesPath, 'backend', 'chaoxing-backend.exe');
+    const script = path.join(__dirname, '..', 'main.py');
+    const options = { windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'gbk' } };
+    const cmdProcess = app.isPackaged
+        ? spawn(backend, args, { ...options, cwd: app.getPath('userData') })
+        : spawn('python', [script, ...args], options);
+
+    cmdProcess.on('error', (error) => {
+        event.reply('cmd-output', `无法启动 Python 后端：${error.message}\n`);
+    });
 
     // 实时输出日志（将 GBK 转换为 UTF-8）
     cmdProcess.stdout.on('data', (data) => {
@@ -83,7 +95,9 @@ ipcMain.on('run-cmd', (event, command) => {
     });
 
     cmdProcess.on('close', (code) => {
-        event.reply('cmd-output', `命令执行完毕，退出码：${code}`);
+        if (code !== null) {
+            event.reply('cmd-output', `命令执行完毕，退出码：${code}\n`);
+        }
     });
 });
 

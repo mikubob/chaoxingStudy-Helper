@@ -15,42 +15,41 @@
 
 ## 快速开始（推荐）🚀
 
-1. 从 Release 页面下载已打包好的程序。📦
-2. 运行下载的 exe 文件，程序已支持图形化界面。🖥️
+1. 从 [GitHub Release](https://github.com/mikubob/chaoxingStudy-Helper/releases/latest) 下载 `ChaoxingStudy-Helper-Setup-*-x64.exe`，适用于 Windows x64。
+2. 运行安装程序，再从开始菜单打开 ChaoxingStudy Helper。安装包已包含 Python 后端。首次启动答题浏览器时，Selenium Manager 可能需要联网获取 Chrome 和配套驱动。
 
 ### 程序截图
 
  ![screenshot](screenshot.png)
 
-注意：程序默认使用通义千问AI模型，您需要自行申请API密钥。申请地址：[通义千问API](https://bailian.console.aliyun.com/?apiKey=1) 🔑
+在桌面端的「模型服务」中选择通义千问或 Ollama，并按需填写「文本模型」。留空时使用该服务的默认模型。
 
-## 手动运行并调用Ollama 🛠️
+- **通义千问**默认使用 `qwen-max`。填写 API Token，可另外指定图片填空题使用的模型，默认为 `qwen-vl-max-latest`。[申请通义千问 API Token](https://bailian.console.aliyun.com/?apiKey=1)
+- **Ollama** 默认连接 `http://localhost:11434`，使用 `qwen2:latest`。可以填写远程 Ollama 地址和该服务上已安装的模型名。Ollama 支持选择题和判断题。
 
-如果您希望手动运行程序并使用Ollama作为AI模型，请按照以下步骤操作：
+## 从源码运行 🛠️
 
-1. 从Git仓库下载源代码。📥
+安装 Python 依赖。程序会查找 Chrome 并管理驱动。如果运行目录中已有 `chromedriver/chrome.exe` 和 `chromedriver/chromedriver.exe`，程序会使用这两个文件。
 
-2. 安装所需依赖：
+```sh
+pip install dashscope selenium==4.31.0 requests
+```
 
-   ```
-   pip install dashscope selenium==4.5.0 requests
-   ```
+运行 `python main.py`，按提示输入账号、密码和第一题链接，再选择服务并填写模型。也可通过参数指定配置，运行 `python main.py --help` 查看 `--provider`、`--model`、`--ollama-url` 和 `--vision-model` 的用法。
 
-3. 配置Chrome浏览器驱动。🌐
+开发桌面端时，运行 `npm ci`，再在两个终端分别运行 `npm run serve` 和 `npm run electron:serve`。
 
-4. 在程序中填写您的超星学习通账号和密码。🔐
-
-5. 填写考试链接（登录超星学习通后，点击“开始考试”，复制第一题的链接即可）。📝
-
-6. 选择AI作答来源：Ollama 或 通义千问。
-
-   - 通义千问Token获取：[通义千问API](https://bailian.console.aliyun.com/?apiKey=1) 🔑
-   - Ollama对接：请自行修改代码第58至66行。💻
+在 Windows x64 上构建安装包时，先安装上述依赖及 `pyinstaller==6.16.0`，再运行 `npm ci` 和 `npm run electron:build`。安装包生成在 `release/`。
 
 ## 注意事项 📌
 
 - 目前本项目仅支持单选题、多选题、填空题和判断题的自动作答。✅ （目前仅考试模式支持填空）
 - 使用前请确保已正确配置AI模型和相关依赖。🔧
+
+## 版本 1.2.0
+
+- 桌面端和命令行支持选择通义千问或 Ollama，自定义文本模型，通义千问可单独设置图片模型。
+- 提供包含 Python 后端的 Windows x64 安装包。
 
 ## 版本 1.1
 

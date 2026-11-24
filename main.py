@@ -11,7 +11,6 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.service import Service as ChromeService
 import requests
 sys.stdout.reconfigure(encoding='gbk', line_buffering=True,errors='ignore')
-print("浏览器启动中...")
 # current_directory = os.path.dirname(os.path.abspath(__file__))
 
 # opt = Options()
@@ -23,22 +22,29 @@ print("浏览器启动中...")
 # # ser.executable_path = rf'{current_directory}\Chrome\chromedriver.exe'
 # ser.executable_path = rf'..\chromedriver\chromedriver.exe'
 homework = 'n'
+default_ollama_url = 'http://localhost:11434'
+default_vision_model = 'qwen-vl-max-latest'
+default_text_models = {'tongyi': 'qwen-max', 'ollama': 'qwen2:latest'}
 arg = sys.argv
 if len(arg) < 2:
     username = input('请输入超星账号:')
     password = input('请输入超星密码:')
     url = input('请输入进入考试页面后的网址:')
-    model = input("答案获取方式：1.本地ollama 2.通义千问（自行配置API）")
-
-    modelAi = ""
-    if model == "1":
+    provider = input("模型服务：1. Ollama  2. 通义千问：").strip()
+    tongyiApi = ''
+    ollama_url = default_ollama_url
+    vision_model = default_vision_model
+    if provider == "1":
         modelAi = "ollama"
-    elif model == "2":
-        tongyiApi = input("请输入通义千问api token：")
+        ollama_url = input(f"Ollama 服务地址（默认 {default_ollama_url}）：").strip() or default_ollama_url
+    elif provider == "2":
         modelAi = "tongyi"
+        tongyiApi = input("请输入通义千问 API Token：").strip()
+        vision_model = input(f"图片模型（默认 {default_vision_model}）：").strip() or default_vision_model
     else:
-        print("输入有误")
-        sys.exit(0)
+        sys.exit("请选择模型服务 1 或 2")
+    default_model = default_text_models[modelAi]
+    model_name = input(f"文本模型（默认 {default_model}）：").strip() or default_model
 else:
     parser = argparse.ArgumentParser()
 
@@ -47,22 +53,39 @@ else:
     parser.add_argument('--url')
     parser.add_argument('--api')
     parser.add_argument('--homework')
+    parser.add_argument('--provider', choices=default_text_models, default='tongyi', help='模型服务')
+    parser.add_argument('--model', help='文本模型名称，留空使用所选服务的默认值')
+    parser.add_argument('--ollama-url', default=default_ollama_url, help='Ollama 服务地址')
+    parser.add_argument('--vision-model', default=default_vision_model, help='通义千问图片模型名称')
 
     args = parser.parse_args()
 
     username = args.username
     password = args.password
     url = args.url
-    modelAi = "tongyi"
-    tongyiApi = args.api
+    modelAi = args.provider
+    model_name = (args.model or '').strip() or default_text_models[modelAi]
+    tongyiApi = (args.api or '').strip()
+    ollama_url = args.ollama_url.strip() or default_ollama_url
+    vision_model = args.vision_model.strip() or default_vision_model
     homework = args.homework
 
+if modelAi == 'tongyi' and not tongyiApi:
+    print('请填写通义千问 API Token。')
+    sys.exit(2)
 
+print("浏览器启动中...")
 options = webdriver.ChromeOptions()
-options.binary_location=r"chromedriver\chrome.exe"
 options.add_argument('--no-sandbox')
 options.add_experimental_option('detach', True)
-browser = webdriver.Chrome(service=ChromeService(executable_path="chromedriver\chromedriver.exe"),options=options)
+local_chrome = os.path.join('chromedriver', 'chrome.exe')
+local_driver = os.path.join('chromedriver', 'chromedriver.exe')
+if os.path.isfile(local_chrome) and os.path.isfile(local_driver):
+    options.binary_location = os.path.abspath(local_chrome)
+    service = ChromeService(executable_path=os.path.abspath(local_driver))
+else:
+    service = ChromeService()
+browser = webdriver.Chrome(service=service, options=options)
 browser.maximize_window()
 
 browser.get(url)
@@ -82,37 +105,34 @@ if not os.path.exists('result'):
     os.makedirs('result')
 
 def ollama(text):
-    url = "http://10.4.240.253:11434/api/generate"
+    url = f"{ollama_url.rstrip('/')}/api/generate"
     data = {
-        "model": "qwen2:latest",
+        "model": model_name,
         "prompt": f"这是题目：{text} 直接返回给我答案的对应选项 不要描述其他的",
         "stream": False
     }
     response = requests.post(url, json=data)
+    response.raise_for_status()
     res = response.text
     data = json.loads(res)
     ans = data.get("response")
     return ans
 
-def tongyi(text):
-    dashscope.api_key = tongyiApi
-    text = f"这是题目：{text} 直接返回给我答案的对应字母 不要描述其他的"
+def tongyi_generate(text):
     messages = [{'role': 'user', 'content': text}]
-    response = dashscope.Generation.call(dashscope.Generation.Models.qwen_max, messages=messages,
-                                         result_format='message')
-    content = response['output']['choices'][0]['message']['content']
+    response = dashscope.Generation.call(model_name, messages=messages,
+                                         api_key=tongyiApi, result_format='message')
+    if response['status_code'] != 200:
+        raise RuntimeError(f"通义千问模型 {model_name} 调用失败：{response['message']}")
+    return response['output']['choices'][0]['message']['content']
 
-    return content
+def tongyi(text):
+    text = f"这是题目：{text} 直接返回给我答案的对应字母 不要描述其他的"
+    return tongyi_generate(text)
 
 def ty_tiankong(text,num):
-    dashscope.api_key = tongyiApi
     text = f"这是一道填空题,{text},请你进行回答,问题里的$填空内容就是需要回答的地方,一共有{num}个空,请你直接告诉我答案 不要描述其他的 每个答案用换行分隔 返回答案的数量要跟我发的一模一样"
-    messages = [{'role': 'user', 'content': text}]
-    response = dashscope.Generation.call(dashscope.Generation.Models.qwen_max, messages=messages,
-                                         result_format='message')
-    content = response['output']['choices'][0]['message']['content']
-
-    return content
+    return tongyi_generate(text)
 
 def ty_tiankong_img(text,num,img):
     i = 0
@@ -131,7 +151,7 @@ def ty_tiankong_img(text,num,img):
         ]
         response = dashscope.MultiModalConversation.call(
             api_key=tongyiApi,
-            model='qwen-vl-max-latest',
+            model=vision_model,
             messages=messages
         )
 
